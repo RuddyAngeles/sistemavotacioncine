@@ -1,0 +1,11 @@
+# Copia este archivo a `.dev.vars` para desarrollo local con `wrangler dev`.
+# `.dev.vars` esta en .gitignore y nunca debe subirse al repositorio.
+
+ENVIRONMENT=development
+APP_ORIGIN=http://localhost:5173
+SESSION_TTL_HOURS=12
+
+# En local usamos menos iteraciones para que el login sea instantaneo.
+AUTH_PBKDF2_ITERATIONS=50000
+
+MAX_UPLOAD_BYTES=5242880

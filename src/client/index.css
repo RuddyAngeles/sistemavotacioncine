@@ -1,0 +1,259 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Sistema de diseno.
+ *
+ * Paleta deliberadamente sobria: gris neutro para casi todo y color
+ * reservado para estados (activo, exito, aviso, error). La jerarquia se
+ * consigue con espacio, tipografia y bordes sutiles, no con color.
+ *
+ * --border se usa para tarjetas y separadores, y se mantiene discreto.
+ * --input es el borde de los controles de formulario y va un paso mas
+ * marcado: un campo tiene que leerse como algo en lo que se escribe,
+ * tambien en modo oscuro sobre fondo casi negro.
+ * --border-strong es para lo que tiene que quedar claramente encerrado
+ * aunque este solo en mitad de la pantalla, como la tarjeta de acceso: ahi
+ * no hay nada alrededor que ayude a distinguir donde empieza y donde acaba.
+ *
+ * Tipografia del sistema: sin descargas externas. Carga instantanea,
+ * funciona sin conexion y no filtra ninguna peticion a terceros, algo
+ * coherente con una aplicacion interna y privada.
+ */
+
+:root {
+  --radius: 0.7rem;
+
+  --background: #fafafa;
+  --foreground: #111111;
+
+  --card: #ffffff;
+  --card-foreground: #111111;
+
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fafafa;
+
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+
+  --info: #2563eb;
+  --info-foreground: #ffffff;
+
+  --border: #e4e4e7;
+  /* Mas oscuro que --background (#fafafa) para que el campo se distinga. */
+  --input: #d4d4d8;
+  --border-strong: #d8d8dd;
+  --ring: #18181b;
+
+  --surface-subtle: #f7f7f8;
+  --shadow-soft: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.06);
+  --shadow-raised: 0 4px 16px -4px rgb(0 0 0 / 0.1), 0 2px 6px -2px rgb(0 0 0 / 0.06);
+}
+
+.dark {
+  --background: #09090b;
+  --foreground: #fafafa;
+
+  --card: #111113;
+  --card-foreground: #fafafa;
+
+  --popover: #141417;
+  --popover-foreground: #fafafa;
+
+  --primary: #fafafa;
+  --primary-foreground: #111113;
+
+  --secondary: #1c1c20;
+  --secondary-foreground: #fafafa;
+
+  --muted: #1c1c20;
+  --muted-foreground: #a1a1aa;
+
+  --accent: #232329;
+  --accent-foreground: #fafafa;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #0b0b0d;
+
+  --success: #22c55e;
+  --success-foreground: #0b0b0d;
+
+  --warning: #f59e0b;
+  --warning-foreground: #0b0b0d;
+
+  --info: #60a5fa;
+  --info-foreground: #0b0b0d;
+
+  --border: #26262b;
+  /* Gris visible: sobre #09090b un borde casi negro no se ve. */
+  --input: #3f3f46;
+  --border-strong: #3f3f46;
+  --ring: #d4d4d8;
+
+  --surface-subtle: #141417;
+  --shadow-soft: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+  --shadow-raised: 0 8px 28px -8px rgb(0 0 0 / 0.7);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface-subtle: var(--surface-subtle);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-soft: var(--shadow-soft);
+  --shadow-raised: var(--shadow-raised);
+
+  --font-sans:
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, 'Noto Sans', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Foco siempre visible al navegar con teclado. */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-foreground) 18%, transparent);
+  }
+
+  /* Barras de desplazamiento discretas en escritorio. */
+  @media (pointer: fine) {
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: color-mix(in oklab, var(--color-muted-foreground) 35%, transparent);
+      border: 3px solid var(--color-background);
+      border-radius: 9999px;
+    }
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Superficie base de tarjetas y paneles. */
+  .surface {
+    background-color: var(--color-card);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+}
+
+/*
+ * Espaciado interno de las tarjetas.
+ *
+ * Cada parte (cabecera, contenido, pie) lleva su padding completo, de modo
+ * que una tarjeta sin cabecera no se queda con el contenido pegado al borde
+ * superior. Cuando una parte va justo debajo de otra, se elimina el espacio
+ * de arriba para no duplicarlo.
+ *
+ * Va FUERA de `@layer` a proposito: las utilidades de Tailwind viven en la
+ * capa `utilities` y una regla dentro de una capa perderia contra `sm:p-6`.
+ * El CSS sin capa tiene prioridad sobre el CSS en capas.
+ */
+[data-card-header] + [data-card-content],
+[data-card-header] + [data-card-footer],
+[data-card-content] + [data-card-footer] {
+  padding-top: 0;
+}
+
+/*
+ * Accesibilidad: quien haya pedido menos movimiento en su sistema no recibe
+ * animaciones. Framer Motion lo respeta ademas por su cuenta (MotionConfig).
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

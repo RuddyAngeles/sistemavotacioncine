@@ -1,0 +1,56 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "movie-night-votes",
+  "main": "src/server/index.ts",
+  "compatibility_date": "2025-09-01",
+
+  // Un unico Worker sirve la API (Hono) y el frontend compilado (Static Assets).
+  // `run_worker_first` permite aplicar cabeceras de seguridad y noindex a TODO,
+  // incluidos los assets estaticos.
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+
+  "observability": {
+    "enabled": true
+  },
+
+  // Estos son los valores de PRODUCCION.
+  // En local, `.dev.vars` tiene prioridad sobre este bloque, asi que
+  // `wrangler dev` sigue usando la configuracion de desarrollo.
+  "vars": {
+    "ENVIRONMENT": "production",
+    "APP_ORIGIN": "https://movie-night-votes.atubehip.workers.dev",
+    "SESSION_TTL_HOURS": "12",
+    // Coste del hash de contrasenas. 100000 es el MAXIMO que admite
+    // WebCrypto en Workers: por encima, el login falla con
+    // "Pbkdf2 failed: iteration counts above 100000 are not supported".
+    // El codigo recorta el valor igualmente (ver src/server/env.ts).
+    "AUTH_PBKDF2_ITERATIONS": "100000",
+    "MAX_UPLOAD_BYTES": "5242880"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "movie-night-db",
+      "database_id": "6225801a-77f0-42e7-9585-225931c367d9",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "movie-night-media"
+    }
+  ],
+
+  // Cierre/apertura automatica de votaciones programadas (cada 5 minutos).
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  }
+}

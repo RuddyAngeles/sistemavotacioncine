@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es" class="dark" suppressHydrationWarning>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Sistema privado: no debe aparecer en buscadores. -->
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate" />
+    <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+    <meta name="referrer" content="no-referrer" />
+
+    <title>Movie Night</title>
+    <meta name="description" content="" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#FAFAFA" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#09090B" media="(prefers-color-scheme: dark)" />
+    <!--
+      Icono de la aplicacion. Solo el SVG: al no llevar fondo, el color se
+      adapta al tema de la barra de pestanas, y eso un PNG no puede hacerlo.
+      El de iOS si es PNG porque la pantalla de inicio necesita una baldosa.
+    -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <script>
+      // Aplica el tema antes del primer paint para evitar el "flash" de tema claro.
+      (function () {
+        try {
+          var stored = localStorage.getItem('movie-night-theme') || 'system'
+          var isDark =
+            stored === 'dark' ||
+            (stored === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.toggle('dark', isDark)
+        } catch (_) {
+          /* localStorage puede fallar en modo privado: el tema por defecto sigue siendo valido */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Esta aplicacion requiere JavaScript para funcionar.</noscript>
+    <script type="module" src="/src/client/main.tsx"></script>
+  </body>
+</html>
