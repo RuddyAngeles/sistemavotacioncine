@@ -1,7 +1,8 @@
-import { Clapperboard, LayoutDashboard } from 'lucide-react'
+import { LayoutDashboard } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ThemeToggle } from '@/client/components/common/theme-toggle'
+import { BrandMark } from '@/client/components/layout/brand-mark'
 import { UserMenu } from '@/client/components/layout/user-menu'
 import { Button } from '@/client/components/ui/button'
 import { useAuth } from '@/client/hooks/use-auth'
@@ -18,10 +19,8 @@ export function Brand({ className, to = '/app' }: { className?: string; to?: str
         className,
       )}
     >
-      <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-        <Clapperboard className="size-4" />
-      </span>
-      <span>Movie Night</span>
+      <BrandMark className="size-7 text-brand" />
+      <span>Quorum</span>
     </Link>
   )
 }

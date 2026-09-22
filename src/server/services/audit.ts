@@ -7,7 +7,16 @@ import { clientIp, nowIso, userAgent } from '../lib/http'
 
 export interface AuditInput {
   action: AuditAction
-  entity: 'user' | 'poll' | 'option' | 'vote' | 'media' | 'session' | 'participation'
+  entity:
+    | 'user'
+    | 'poll'
+    | 'option'
+    | 'vote'
+    | 'media'
+    | 'session'
+    | 'participation'
+    | 'survey'
+    | 'survey_question'
   entityId?: string | null
   metadata?: Record<string, unknown> | null
   /** Para el login fallido, donde todavia no hay usuario en el contexto. */

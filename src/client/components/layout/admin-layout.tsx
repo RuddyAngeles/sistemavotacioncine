@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  ClipboardList,
   History,
   LayoutDashboard,
   Menu,
@@ -19,6 +20,7 @@ import { cn } from '@/client/lib/utils'
 const NAVIGATION = [
   { to: '/admin', label: 'Panel', icon: LayoutDashboard, end: true },
   { to: '/admin/votaciones', label: 'Votaciones', icon: Vote, end: false },
+  { to: '/admin/encuestas', label: 'Encuestas', icon: ClipboardList, end: false },
   { to: '/admin/usuarios', label: 'Usuarios', icon: Users, end: false },
   { to: '/admin/historial', label: 'Historial', icon: History, end: false },
   { to: '/admin/auditoria', label: 'Auditoria', icon: ScrollText, end: false },

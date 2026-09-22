@@ -74,6 +74,15 @@ export const ERROR_CODES = {
   POLL_HAS_NO_OPTIONS: 'POLL_HAS_NO_OPTIONS',
   UPLOAD_INVALID: 'UPLOAD_INVALID',
   LAST_ADMIN: 'LAST_ADMIN',
+
+  // Encuestas
+  SURVEY_NOT_OPEN: 'SURVEY_NOT_OPEN',
+  SURVEY_ALREADY_ANSWERED: 'SURVEY_ALREADY_ANSWERED',
+  SURVEY_CHANGE_NOT_ALLOWED: 'SURVEY_CHANGE_NOT_ALLOWED',
+  SURVEY_HAS_NO_QUESTIONS: 'SURVEY_HAS_NO_QUESTIONS',
+  SURVEY_ANSWERS_INCOMPLETE: 'SURVEY_ANSWERS_INCOMPLETE',
+  SURVEY_PERMISSION_REQUIRED: 'SURVEY_PERMISSION_REQUIRED',
+  SURVEY_ANONYMITY_LOCKED: 'SURVEY_ANONYMITY_LOCKED',
 } as const
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES]
@@ -114,6 +123,21 @@ export const AUDIT_ACTIONS = {
 
   /** Un admin desveló quien voto que: se deja constancia explicita. */
   PARTICIPATION_CHOICES_VIEWED: 'participation.choices_viewed',
+
+  SURVEY_CREATED: 'survey.created',
+  SURVEY_UPDATED: 'survey.updated',
+  SURVEY_DELETED: 'survey.deleted',
+  SURVEY_PUBLISHED: 'survey.published',
+  SURVEY_OPENED: 'survey.opened',
+  SURVEY_CLOSED: 'survey.closed',
+  SURVEY_ARCHIVED: 'survey.archived',
+  SURVEY_REOPENED: 'survey.reopened',
+  SURVEY_QUESTION_CREATED: 'survey.question_created',
+  SURVEY_QUESTION_UPDATED: 'survey.question_updated',
+  SURVEY_QUESTION_DELETED: 'survey.question_deleted',
+  SURVEY_PERMISSION_GRANTED: 'survey.permission_granted',
+  SURVEY_PERMISSION_REVOKED: 'survey.permission_revoked',
+  SURVEY_PERMISSION_BULK: 'survey.permission_bulk',
 } as const
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS]

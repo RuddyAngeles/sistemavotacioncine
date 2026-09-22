@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Sistema privado de votaciones internas (Movie Night) sobre Cloudflare Workers + D1 + R2",
+  "description": "Quorum: sistema privado de votaciones y encuestas internas sobre Cloudflare Workers + D1 + R2",
   "engines": {
     "node": ">=20"
   },

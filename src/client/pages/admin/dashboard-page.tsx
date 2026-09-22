@@ -1,5 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
-import { Activity, CheckCircle2, FileEdit, Pin, Plus, TrendingUp, Users, Vote } from 'lucide-react'
+import {
+  Activity,
+  CheckCircle2,
+  ClipboardList,
+  FileEdit,
+  Pin,
+  Plus,
+  TrendingUp,
+  Users,
+  Vote,
+} from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { CopyField } from '@/client/components/common/copy-field'
 import { PageHeader } from '@/client/components/common/page-header'
@@ -58,6 +68,26 @@ export function DashboardPage() {
           <CopyField
             id="enlace-fijo-panel"
             value={origin + '/votar'}
+            highlighted
+            className="w-full sm:max-w-md"
+          />
+        </div>
+
+        {/* El de encuestas funciona igual y se reparte del mismo modo. */}
+        <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <p className="inline-flex items-center gap-2 text-sm font-medium">
+              <ClipboardList className="size-4 text-primary" aria-hidden="true" />
+              Enlace para las encuestas
+            </p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Igual que el anterior, pero lleva a la encuesta abierta en ese momento.
+            </p>
+          </div>
+
+          <CopyField
+            id="enlace-encuestas-panel"
+            value={origin + '/responder'}
             highlighted
             className="w-full sm:max-w-md"
           />
@@ -134,7 +164,7 @@ export function DashboardPage() {
                             </p>
                           ) : null}
                         </div>
-                        <Button asChild variant="outline" size="sm" className="shrink-0">
+                        <Button asChild variant="outline" size="sm" className="min-h-10 shrink-0 sm:min-h-8">
                           <Link to={'/admin/votaciones/' + poll.id}>Gestionar</Link>
                         </Button>
                       </div>

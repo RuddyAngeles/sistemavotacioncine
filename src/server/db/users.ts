@@ -10,6 +10,7 @@ export interface UserRow {
   role: Role
   status: UserStatus
   must_change_password: number
+  can_answer_surveys: number
   last_login_at: string | null
   password_changed_at: string | null
   created_at: string
@@ -25,6 +26,7 @@ export function toUserDTO(row: UserRow): UserDTO {
     role: row.role,
     status: row.status,
     mustChangePassword: fromBool(row.must_change_password),
+    canAnswerSurveys: fromBool(row.can_answer_surveys),
     lastLoginAt: row.last_login_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -40,6 +42,7 @@ const COLUMNS = [
   'role',
   'status',
   'must_change_password',
+  'can_answer_surveys',
   'last_login_at',
   'password_changed_at',
   'created_at',
@@ -246,4 +249,47 @@ export async function userStats(db: D1Database): Promise<UserStats> {
     inactive: row?.inactive ?? 0,
     admins: row?.admins ?? 0,
   }
+}
+
+/**
+ * Permiso de encuestas para una seleccion de cuentas.
+ *
+ * Devuelve cuantas filas ha cambiado de verdad, no cuantas se pidieron: si
+ * media plantilla ya lo tenia, el administrador ve el numero real.
+ */
+export async function setSurveyPermission(
+  db: D1Database,
+  userIds: string[],
+  permitido: boolean,
+  now: string,
+): Promise<number> {
+  if (userIds.length === 0) return 0
+
+  const huecos = userIds.map(() => '?').join(', ')
+  const resultado = await db
+    .prepare(
+      `UPDATE users SET can_answer_surveys = ?, updated_at = ?
+        WHERE id IN (${huecos}) AND can_answer_surveys <> ?`,
+    )
+    .bind(bool(permitido), now, ...userIds, bool(permitido))
+    .run()
+
+  return resultado.meta.changes ?? 0
+}
+
+/** Lo mismo para todas las cuentas activas. */
+export async function setSurveyPermissionForAll(
+  db: D1Database,
+  permitido: boolean,
+  now: string,
+): Promise<number> {
+  const resultado = await db
+    .prepare(
+      `UPDATE users SET can_answer_surveys = ?, updated_at = ?
+        WHERE status = 'ACTIVE' AND can_answer_surveys <> ?`,
+    )
+    .bind(bool(permitido), now, bool(permitido))
+    .run()
+
+  return resultado.meta.changes ?? 0
 }

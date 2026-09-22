@@ -20,7 +20,8 @@ export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsP
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5',
+        // min-h-10 en movil: una pestana de 32px se falla con el dedo.
+        'inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5 sm:min-h-8',
         'text-sm font-medium transition-all',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         'disabled:pointer-events-none disabled:opacity-50',

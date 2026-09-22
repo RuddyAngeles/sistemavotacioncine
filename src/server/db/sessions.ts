@@ -22,6 +22,7 @@ export interface SessionWithUserRow {
   role: Role
   status: UserStatus
   must_change_password: number
+  can_answer_surveys: number
 }
 
 export async function insertSession(
@@ -68,7 +69,8 @@ export function findSessionWithUser(
                 u.username     AS username,
                 u.role         AS role,
                 u.status       AS status,
-                u.must_change_password AS must_change_password
+                u.must_change_password AS must_change_password,
+                u.can_answer_surveys   AS can_answer_surveys
            FROM sessions s
            JOIN users u ON u.id = s.user_id
           WHERE s.id = ? AND s.expires_at > ?`,

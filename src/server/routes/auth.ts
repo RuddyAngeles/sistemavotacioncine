@@ -42,6 +42,7 @@ authRoutes.get('/me', (c) => {
     username: user.username,
     role: user.role,
     mustChangePassword: user.mustChangePassword,
+    canAnswerSurveys: user.canAnswerSurveys,
   }
   return c.json({ user: payload })
 })
@@ -73,6 +74,7 @@ authRoutes.patch('/me', requireAuth, async (c) => {
     username: current.username,
     role: current.role,
     mustChangePassword: current.mustChangePassword,
+    canAnswerSurveys: current.canAnswerSurveys,
   }
   return c.json({ user: payload })
 })

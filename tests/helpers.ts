@@ -57,6 +57,7 @@ export async function createUser(options: {
   role?: Role
   status?: UserStatus
   mustChangePassword?: boolean
+  canAnswerSurveys?: boolean
 } = {}): Promise<{ id: string; username: string; password: string }> {
   counter += 1
   const username = options.username ?? 'usuario' + counter
@@ -67,8 +68,8 @@ export async function createUser(options: {
 
   await env.DB.prepare(
     `INSERT INTO users (id, name, username, username_lower, password_hash, role, status,
-       must_change_password, password_changed_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       must_change_password, can_answer_surveys, password_changed_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -79,6 +80,7 @@ export async function createUser(options: {
       options.role ?? 'VOTER',
       options.status ?? 'ACTIVE',
       options.mustChangePassword ? 1 : 0,
+      options.canAnswerSurveys ? 1 : 0,
       now,
       now,
       now,
@@ -128,6 +130,12 @@ export async function loginOtraVez(username: string, password = 'Secreta123'): P
 /** Limpia todas las tablas entre tests que lo necesiten. */
 export async function resetDatabase(): Promise<void> {
   await env.DB.batch([
+    env.DB.prepare('DELETE FROM survey_answers'),
+    env.DB.prepare('DELETE FROM survey_submissions'),
+    env.DB.prepare('DELETE FROM survey_participants'),
+    env.DB.prepare('DELETE FROM survey_options'),
+    env.DB.prepare('DELETE FROM survey_questions'),
+    env.DB.prepare('DELETE FROM surveys'),
     env.DB.prepare('DELETE FROM votes'),
     env.DB.prepare('DELETE FROM poll_options'),
     env.DB.prepare('DELETE FROM polls'),

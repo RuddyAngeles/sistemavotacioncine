@@ -6,7 +6,14 @@ export function Switch({ className, ...props }: ComponentProps<typeof SwitchPrim
   return (
     <SwitchPrimitive.Root
       className={cn(
-        'peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent',
+        'peer relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent',
+        /*
+         * El interruptor mide 24px de alto, que con el dedo se falla. En lugar
+         * de agrandarlo (quedaria desproporcionado junto al texto), se amplia
+         * solo la zona que responde al toque con un pseudoelemento invisible.
+         * En escritorio no hace falta, porque se apunta con el raton.
+         */
+        'before:absolute before:-inset-2.5 before:content-[""] sm:before:hidden',
         'transition-colors duration-200',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         'disabled:cursor-not-allowed disabled:opacity-50',

@@ -289,6 +289,257 @@ export const participationQuerySchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
+// Encuestas
+// ---------------------------------------------------------------------------
+
+export const SURVEY_QUESTION_TYPES = ['SINGLE', 'MULTIPLE', 'TEXT', 'SCALE'] as const
+
+export const SCALE_MIN = 1
+export const SCALE_MAX = 10
+export const SURVEY_TEXT_MAX_LENGTH = 2000
+
+const surveySettingsShape = {
+  anonymous: z.boolean().default(false),
+  allowResponseChange: z.boolean().default(true),
+  showLiveResults: z.boolean().default(false),
+  showResultsAfterClose: z.boolean().default(true),
+}
+
+/**
+ * Una encuesta anonima no admite cambio de respuesta.
+ *
+ * Se corrige en lugar de rechazarse: quien marca "anonima" en el formulario
+ * no esta pidiendo las dos cosas a la vez, y fallar aqui seria un error que
+ * no sabria interpretar. La base lo garantiza ademas con un CHECK.
+ */
+function conAnonimatoCoherente<T extends { anonymous?: boolean; allowResponseChange?: boolean }>(
+  valores: T,
+): T {
+  return valores.anonymous ? { ...valores, allowResponseChange: false } : valores
+}
+
+export const createSurveySchema = z
+  .object({
+    title: z.string().trim().min(3, 'El titulo es obligatorio').max(150),
+    description: z
+      .string()
+      .trim()
+      .max(1000)
+      .nullish()
+      .transform((v) => v || null),
+    startsAt: z
+      .string()
+      .datetime()
+      .nullish()
+      .transform((v) => v || null),
+    endsAt: z
+      .string()
+      .datetime()
+      .nullish()
+      .transform((v) => v || null),
+    ...surveySettingsShape,
+  })
+  .transform(conAnonimatoCoherente)
+
+export const updateSurveySchema = z
+  .object({
+    title: z.string().trim().min(3).max(150).optional(),
+    description: z
+      .string()
+      .trim()
+      .max(1000)
+      .nullish()
+      .transform((v) => v ?? null)
+      .optional(),
+    anonymous: z.boolean().optional(),
+    allowResponseChange: z.boolean().optional(),
+    showLiveResults: z.boolean().optional(),
+    showResultsAfterClose: z.boolean().optional(),
+    startsAt: z
+      .string()
+      .datetime()
+      .nullish()
+      .transform((v) => v ?? null)
+      .optional(),
+    endsAt: z
+      .string()
+      .datetime()
+      .nullish()
+      .transform((v) => v ?? null)
+      .optional(),
+  })
+  .transform(conAnonimatoCoherente)
+
+const surveyOptionSchema = z.object({
+  /*
+   * El id viaja de vuelta al editar. Sin el, el servidor no podria saber que
+   * una opcion es la misma de antes con el texto corregido, y al rehacerla
+   * se llevaria por delante las respuestas que apuntan a ella.
+   */
+  id: z.string().min(1).optional(),
+  text: z.string().trim().min(1, 'La opcion no puede estar vacia').max(200),
+})
+
+/**
+ * Pregunta de una encuesta.
+ *
+ * Las opciones son obligatorias en SINGLE y MULTIPLE, y no tienen sentido en
+ * TEXT ni SCALE: se valida aqui para que no llegue al servidor una pregunta
+ * de opcion unica sin nada que elegir.
+ */
+export const createQuestionSchema = z
+  .object({
+    type: z.enum(SURVEY_QUESTION_TYPES),
+    text: z.string().trim().min(1, 'La pregunta es obligatoria').max(500),
+    help: z
+      .string()
+      .trim()
+      .max(300)
+      .nullish()
+      .transform((v) => v || null),
+    required: z.boolean().default(true),
+    options: z.array(surveyOptionSchema).max(30).default([]),
+    minChoices: z
+      .number()
+      .int()
+      .min(1)
+      .max(30)
+      .nullish()
+      .transform((v) => v ?? null),
+    maxChoices: z
+      .number()
+      .int()
+      .min(1)
+      .max(30)
+      .nullish()
+      .transform((v) => v ?? null),
+    scaleMinLabel: z
+      .string()
+      .trim()
+      .max(40)
+      .nullish()
+      .transform((v) => v || null),
+    scaleMaxLabel: z
+      .string()
+      .trim()
+      .max(40)
+      .nullish()
+      .transform((v) => v || null),
+  })
+  .superRefine((valores, ctx) => {
+    const conOpciones = valores.type === 'SINGLE' || valores.type === 'MULTIPLE'
+
+    if (conOpciones && valores.options.length < 2) {
+      ctx.addIssue({ code: 'custom', path: ['options'], message: 'Anade al menos dos opciones' })
+    }
+    if (!conOpciones && valores.options.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['options'],
+        message: 'Este tipo de pregunta no lleva opciones',
+      })
+    }
+    if (valores.type === 'MULTIPLE') {
+      const { minChoices, maxChoices, options } = valores
+      if (minChoices !== null && maxChoices !== null && minChoices > maxChoices) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['minChoices'],
+          message: 'El minimo no puede superar al maximo',
+        })
+      }
+      if (maxChoices !== null && maxChoices > options.length) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['maxChoices'],
+          message: 'El maximo supera el numero de opciones',
+        })
+      }
+    }
+  })
+
+export const reorderQuestionsSchema = z.object({
+  questionIds: z.array(z.string().min(1)).min(1),
+})
+
+/**
+ * Respuesta a una pregunta.
+ *
+ * La forma depende del tipo, asi que se modela como union: un cuerpo que
+ * mezcle texto y opciones no es representable. Que la forma corresponda al
+ * tipo REAL de la pregunta lo comprueba el servidor, que es quien lo sabe.
+ */
+export const surveyAnswerSchema = z.union([
+  z.object({
+    questionId: z.string().min(1),
+    optionIds: z.array(z.string().min(1)).max(30),
+  }),
+  z.object({
+    questionId: z.string().min(1),
+    text: z.string().max(SURVEY_TEXT_MAX_LENGTH),
+  }),
+  z.object({
+    questionId: z.string().min(1),
+    scale: z.number().int().min(SCALE_MIN).max(SCALE_MAX),
+  }),
+])
+
+export const submitSurveySchema = z.object({
+  answers: z.array(surveyAnswerSchema).max(100),
+})
+
+/**
+ * Confirmacion de un cambio que descarta respuestas.
+ *
+ * Quitar una opcion o una pregunta que alguien ya contesto borra esas
+ * respuestas. No se impide (es la encuesta del administrador), pero tiene
+ * que pedirse a proposito: por defecto el servidor lo rechaza.
+ */
+export const descartarRespuestasSchema = z.object({
+  /*
+   * Viaja como parametro de consulta, asi que llega en texto: "true" o
+   * "false", nunca como booleano. Se aceptan las dos formas para que el
+   * mismo esquema valga si algun dia se envia en el cuerpo, pero NO se usa
+   * coercion generica, que convertiria "false" en verdadero.
+   */
+  descartarRespuestas: z
+    .union([z.boolean(), z.enum(['true', 'false']).transform((valor) => valor === 'true')])
+    .default(false),
+})
+
+export const listSurveysQuerySchema = z.object({
+  status: z.enum(POLL_STATUSES).optional(),
+  search: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+})
+
+/** Activar o quitar el permiso de encuestas a varias cuentas de una vez. */
+export const bulkSurveyPermissionSchema = z.object({
+  canAnswerSurveys: z.boolean(),
+  /** Sin lista, se aplica a todas las cuentas activas. */
+  userIds: z.array(z.string().min(1)).max(500).optional(),
+})
+
+export function esRespuestaDeOpciones(
+  respuesta: SurveyAnswerInput,
+): respuesta is { questionId: string; optionIds: string[] } {
+  return 'optionIds' in respuesta
+}
+
+export function esRespuestaDeTexto(
+  respuesta: SurveyAnswerInput,
+): respuesta is { questionId: string; text: string } {
+  return 'text' in respuesta
+}
+
+export function esRespuestaDeEscala(
+  respuesta: SurveyAnswerInput,
+): respuesta is { questionId: string; scale: number } {
+  return 'scale' in respuesta
+}
+
+// ---------------------------------------------------------------------------
 // Tipos inferidos
 // ---------------------------------------------------------------------------
 
@@ -307,6 +558,16 @@ export type UpdateOptionInput = z.infer<typeof updateOptionSchema>
 export type ReorderOptionsInput = z.infer<typeof reorderOptionsSchema>
 export type CastVoteInput = z.infer<typeof castVoteSchema>
 export type ListAuditQuery = z.infer<typeof listAuditQuerySchema>
+export type CreateSurveyInput = z.infer<typeof createSurveySchema>
+export type UpdateSurveyInput = z.infer<typeof updateSurveySchema>
+export type CreateQuestionInput = z.infer<typeof createQuestionSchema>
+export type ReorderQuestionsInput = z.infer<typeof reorderQuestionsSchema>
+export type SurveyAnswerInput = z.infer<typeof surveyAnswerSchema>
+export type SubmitSurveyInput = z.infer<typeof submitSurveySchema>
+export type ListSurveysQuery = z.infer<typeof listSurveysQuerySchema>
+export type BulkSurveyPermissionInput = z.infer<typeof bulkSurveyPermissionSchema>
+export type CreateSurveyFormInput = z.input<typeof createSurveySchema>
+export type CreateQuestionFormInput = z.input<typeof createQuestionSchema>
 
 /** Entrada del formulario antes de aplicar defaults/transformaciones. */
 export type CreateUserFormInput = z.input<typeof createUserSchema>

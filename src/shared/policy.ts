@@ -1,4 +1,4 @@
-import type { PollStatus, Role, UserStatus, VoteBlockReason } from './types'
+import type { PollStatus, Role, SurveyBlockReason, UserStatus, VoteBlockReason } from './types'
 
 /**
  * Reglas de negocio puras: sin base de datos, sin HTTP, sin React.
@@ -210,4 +210,165 @@ export function areOptionsEditable(status: PollStatus): boolean {
 export function percentage(part: number, total: number): number {
   if (total <= 0) return 0
   return Math.round((part / total) * 1000) / 10
+}
+
+// ---------------------------------------------------------------------------
+// Encuestas
+//
+// El calendario, la maquina de estados y la visibilidad de resultados son los
+// mismos que en las votaciones, asi que se reutilizan tal cual en lugar de
+// duplicar reglas que luego se separarian. Lo que si es propio de una encuesta
+// es el permiso para participar y el efecto del anonimato.
+// ---------------------------------------------------------------------------
+
+export interface SurveyRuleState {
+  status: PollStatus
+  anonymous: boolean
+  allowResponseChange: boolean
+  showLiveResults: boolean
+  showResultsAfterClose: boolean
+  startsAt: string | null
+  endsAt: string | null
+}
+
+/** La parte de la encuesta que se rige por las mismas reglas que una votacion. */
+function comoVotacion(survey: SurveyRuleState): PollRuleState {
+  return {
+    status: survey.status,
+    allowVoteChange: survey.allowResponseChange,
+    showLiveResults: survey.showLiveResults,
+    showResultsAfterClose: survey.showResultsAfterClose,
+    startsAt: survey.startsAt,
+    endsAt: survey.endsAt,
+  }
+}
+
+export interface SurveyActorState {
+  role: Role
+  userStatus: UserStatus
+  canAnswerSurveys: boolean
+  hasAnswered: boolean
+}
+
+export interface SurveyEvaluation {
+  canAnswer: boolean
+  canChangeAnswer: boolean
+  blockReason: SurveyBlockReason | null
+}
+
+/**
+ * Que puede hacer una persona con una encuesta.
+ *
+ * El permiso se comprueba el primero y vale para todo el mundo, tambien para
+ * los administradores: administrar encuestas y participar en ellas son cosas
+ * distintas, y mezclarlas haria que un admin apareciese como respondiente sin
+ * haberlo decidido nadie.
+ *
+ * Una encuesta anonima nunca deja cambiar la respuesta. No es una preferencia:
+ * sin vinculo entre la persona y su envio, no hay respuesta que localizar.
+ */
+export function evaluateSurvey(
+  survey: SurveyRuleState,
+  actor: SurveyActorState,
+  now: Date = new Date(),
+): SurveyEvaluation {
+  const bloqueado = (blockReason: SurveyBlockReason): SurveyEvaluation => ({
+    canAnswer: false,
+    canChangeAnswer: false,
+    blockReason,
+  })
+
+  if (actor.userStatus !== 'ACTIVE') return bloqueado('USER_INACTIVE')
+  if (!actor.canAnswerSurveys) return bloqueado('NO_PERMISSION')
+
+  const efectivo = resolveEffectiveStatus(comoVotacion(survey), now)
+
+  if (efectivo === 'DRAFT' || efectivo === 'PUBLISHED' || efectivo === 'SCHEDULED') {
+    const ventana = getScheduleState(comoVotacion(survey), now)
+    return bloqueado(ventana === 'NOT_STARTED' ? 'NOT_STARTED' : 'NOT_OPEN')
+  }
+  if (efectivo === 'CLOSED') {
+    return bloqueado(getScheduleState(comoVotacion(survey), now) === 'ENDED' ? 'ENDED' : 'CLOSED')
+  }
+  if (efectivo === 'ARCHIVED') return bloqueado('ARCHIVED')
+
+  if (actor.hasAnswered) {
+    // En una anonima esto nunca es `true`, porque `allowResponseChange` no
+    // puede estarlo: lo impide tambien un CHECK en la base.
+    if (survey.allowResponseChange && !survey.anonymous) {
+      return { canAnswer: false, canChangeAnswer: true, blockReason: null }
+    }
+    return bloqueado('ALREADY_ANSWERED')
+  }
+
+  return { canAnswer: true, canChangeAnswer: false, blockReason: null }
+}
+
+/** Misma regla que en las votaciones: la configuracion manda, el admin siempre. */
+export function canViewSurveyResults(
+  survey: SurveyRuleState,
+  role: Role,
+  now: Date = new Date(),
+): boolean {
+  return canViewResults(comoVotacion(survey), role, now)
+}
+
+/** Una encuesta es visible para quien participa a partir de que se publica. */
+export function isSurveyVisible(survey: SurveyRuleState, now: Date = new Date()): boolean {
+  return isVisibleToVoters(comoVotacion(survey), now)
+}
+
+export function resolveSurveyStatus(survey: SurveyRuleState, now: Date = new Date()): PollStatus {
+  return resolveEffectiveStatus(comoVotacion(survey), now)
+}
+
+/**
+ * Cuando se pueden tocar las preguntas de una encuesta.
+ *
+ * Lo que decide NO es el estado, sino si ya hay respuestas. Antes se
+ * bloqueaban al abrir la encuesta, copiando la regla de la cartelera de una
+ * votacion, y era una regla mal trasladada: una encuesta recien abierta a la
+ * que todavia no ha contestado nadie se puede corregir sin que eso invalide
+ * nada. Bloquearla solo obligaba a rehacerla entera por una errata.
+ *
+ * Lo que si queda cerrado es una encuesta cerrada o archivada: sus resultados
+ * ya se han dado por buenos y puede que se hayan compartido.
+ */
+export function areQuestionsEditable(status: PollStatus): boolean {
+  return status !== 'CLOSED' && status !== 'ARCHIVED'
+}
+
+/**
+ * Si un cambio concreto puede destruir respuestas ya recibidas.
+ *
+ * Corregir el enunciado de una pregunta, o el texto de una opcion, no toca
+ * las respuestas: apuntan al identificador de la opcion, no a su texto. Lo
+ * que si las destruye es ELIMINAR una opcion o una pregunta que alguien ya
+ * ha contestado. Por eso esos dos casos piden confirmacion explicita y el
+ * resto no.
+ */
+export function editDestruyeRespuestas(respuestasAfectadas: number): boolean {
+  return respuestasAfectadas > 0
+}
+
+/**
+ * El anonimato solo se puede cambiar mientras la encuesta sea un borrador.
+ *
+ * Pasarla a anonima con respuestas ya identificadas no las anonimizaria (los
+ * `user_id` ya estan escritos), y al reves seria peor: prometeria una
+ * identificacion que no existe.
+ */
+export function isAnonymityEditable(status: PollStatus): boolean {
+  return status === 'DRAFT'
+}
+
+/**
+ * Con muy pocos envios, ver los resultados de una encuesta anonima puede
+ * bastar para deducir quien contesto que. El sistema no lo impide (seria
+ * arbitrario), pero si lo avisa.
+ */
+export const ANONYMITY_SAFE_MINIMUM = 5
+
+export function isAnonymityAtRisk(anonymous: boolean, submissions: number): boolean {
+  return anonymous && submissions > 0 && submissions < ANONYMITY_SAFE_MINIMUM
 }

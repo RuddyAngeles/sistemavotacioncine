@@ -12,6 +12,8 @@ import { auditRoutes, dashboardRoutes } from './routes/dashboard'
 import { mediaRoutes } from './routes/media'
 import { pollAdminRoutes } from './routes/polls'
 import { userRoutes } from './routes/users'
+import { surveyParticipationRoutes } from './routes/survey-participation'
+import { surveyRoutes } from './routes/surveys'
 import { voterRoutes } from './routes/voter'
 import { votingRoutes } from './routes/voting'
 
@@ -44,6 +46,8 @@ export function createApp() {
   app.route('/api/polls', pollAdminRoutes)
   app.route('/api/polls', votingRoutes)
   app.route('/api/me', voterRoutes)
+  app.route('/api/surveys', surveyRoutes)
+  app.route('/api/me/surveys', surveyParticipationRoutes)
   app.route('/api/dashboard', dashboardRoutes)
   app.route('/api/audit-logs', auditRoutes)
   app.route('/api', mediaRoutes)

@@ -24,6 +24,8 @@ export interface UserDTO {
   role: Role
   status: UserStatus
   mustChangePassword: boolean
+  /** Permiso independiente del rol: participar en encuestas. */
+  canAnswerSurveys: boolean
   lastLoginAt: string | null
   createdAt: string
   updatedAt: string
@@ -36,6 +38,7 @@ export interface SessionUserDTO {
   username: string
   role: Role
   mustChangePassword: boolean
+  canAnswerSurveys: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -316,4 +319,222 @@ export interface ApiErrorBody {
     details?: Record<string, string[]>
     retryAfterSeconds?: number
   }
+}
+
+// ---------------------------------------------------------------------------
+// Encuestas
+//
+// Modulo aparte de las votaciones: varias preguntas por encuesta, de tipos
+// distintos, y con la posibilidad de que sea anonima.
+//
+// El anonimato NO es un campo que la interfaz respete: cuando una encuesta es
+// anonima, el servidor no guarda ninguna relacion entre la persona y su envio,
+// asi que no hay nada que ocultar despues. Lo que si se guarda siempre es
+// QUIEN participo, en una tabla sin vinculo con las respuestas.
+// ---------------------------------------------------------------------------
+
+export type SurveyStatus = PollStatus
+
+/** Tipo de pregunta. Cada una define que se guarda como respuesta. */
+export type SurveyQuestionType = 'SINGLE' | 'MULTIPLE' | 'TEXT' | 'SCALE'
+
+export interface SurveyOptionDTO {
+  id: string
+  text: string
+  position: number
+}
+
+export interface SurveyQuestionDTO {
+  id: string
+  position: number
+  type: SurveyQuestionType
+  text: string
+  help: string | null
+  required: boolean
+  /** Solo en MULTIPLE. `null` significa "sin limite". */
+  minChoices: number | null
+  maxChoices: number | null
+  /** Solo en SCALE. Por defecto del 1 al 10. */
+  scaleMin: number
+  scaleMax: number
+  scaleMinLabel: string | null
+  scaleMaxLabel: string | null
+  /** Vacio en TEXT y SCALE. */
+  options: SurveyOptionDTO[]
+}
+
+export interface SurveySettings {
+  anonymous: boolean
+  allowResponseChange: boolean
+  showLiveResults: boolean
+  showResultsAfterClose: boolean
+}
+
+export interface SurveyDTO extends SurveySettings {
+  id: string
+  slug: string
+  title: string
+  description: string | null
+  status: SurveyStatus
+  startsAt: string | null
+  endsAt: string | null
+  publishedAt: string | null
+  openedAt: string | null
+  closedAt: string | null
+  questionCount: number
+  /** Cuantas personas han respondido. Visible siempre, tambien en anonimas. */
+  responseCount: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SurveyDetailDTO extends SurveyDTO {
+  questions: SurveyQuestionDTO[]
+  /** Cuentas con permiso para participar, para que el admin sepa el alcance. */
+  eligibleCount: number
+}
+
+/** Una respuesta que envia el trabajador, ya normalizada. */
+export type SurveyAnswerInput =
+  | { questionId: string; optionIds: string[] }
+  | { questionId: string; text: string }
+  | { questionId: string; scale: number }
+
+/** Lo que el trabajador ve de su propio envio. En anonimas es siempre null. */
+export interface MySurveyResponseDTO {
+  submittedAt: string
+  changeCount: number
+  answers: SurveyAnswerInput[]
+}
+
+export interface SurveyPermissionsDTO {
+  canAnswer: boolean
+  canChangeAnswer: boolean
+  canViewResults: boolean
+  blockReason: SurveyBlockReason | null
+}
+
+export type SurveyBlockReason =
+  | 'NOT_OPEN'
+  | 'NOT_STARTED'
+  | 'ENDED'
+  | 'CLOSED'
+  | 'ARCHIVED'
+  | 'ALREADY_ANSWERED'
+  | 'USER_INACTIVE'
+  | 'NO_PERMISSION'
+
+export interface SurveyViewDTO {
+  survey: SurveyDTO
+  questions: SurveyQuestionDTO[]
+  /** `null` en una encuesta anonima aunque la persona ya haya respondido. */
+  myResponse: MySurveyResponseDTO | null
+  hasAnswered: boolean
+  permissions: SurveyPermissionsDTO
+  results: SurveyResultsDTO | null
+  serverTime: string
+}
+
+// --- Resultados -------------------------------------------------------------
+
+export interface SurveyOptionResultDTO {
+  optionId: string
+  text: string
+  count: number
+  /** Sobre el total de envios de la encuesta, 0-100 con un decimal. */
+  percentage: number
+}
+
+export interface SurveyScaleResultDTO {
+  average: number
+  /** Cuantas respuestas hay en cada peldano, de `scaleMin` a `scaleMax`. */
+  distribution: Array<{ value: number; count: number }>
+}
+
+export interface SurveyQuestionResultDTO {
+  questionId: string
+  text: string
+  type: SurveyQuestionType
+  answered: number
+  options: SurveyOptionResultDTO[]
+  scale: SurveyScaleResultDTO | null
+  /**
+   * Respuestas escritas, SOLO para administradores.
+   *
+   * Un recuento por opcion es una estadistica; un comentario es la respuesta
+   * individual de alguien reproducida tal cual. Aunque no lleve firma, dejar
+   * que la plantilla lea lo que escribieron sus companeros es enseñar lo que
+   * respondio otro, que es justo lo que no debe pasar. Para el resto llega
+   * vacio y el servidor ni siquiera consulta los textos.
+   */
+  texts: string[]
+  /** Cuantas hay, para poder decirlo sin mostrarlas. */
+  textCount: number
+}
+
+export interface SurveyResultsDTO {
+  surveyId: string
+  status: SurveyStatus
+  anonymous: boolean
+  submissions: number
+  questions: SurveyQuestionResultDTO[]
+  /**
+   * Bloque de organizacion (censo y quien falta). Solo para ADMIN, igual que
+   * en las votaciones. En las anonimas dice quien participo, nunca que dijo.
+   */
+  overview: SurveyOverviewDTO | null
+  generatedAt: string
+}
+
+export interface SurveyOverviewDTO {
+  eligible: number
+  answered: number
+  pending: number
+  /** 0-100, redondeado a un decimal. */
+  participationRate: number
+  /**
+   * Aviso de anonimato debil: con muy pocos envios, ver los resultados de una
+   * encuesta anonima puede bastar para deducir quien dijo que.
+   */
+  anonymityAtRisk: boolean
+}
+
+export interface SurveyParticipantDTO {
+  userId: string
+  name: string
+  username: string
+  hasAnswered: boolean
+  /** En anonimas se redondea al dia, para no servir de puente con el envio. */
+  answeredAt: string | null
+}
+
+export interface SurveyParticipationDTO {
+  surveyId: string
+  anonymous: boolean
+  eligible: number
+  answered: number
+  pending: number
+  participationRate: number
+  users: SurveyParticipantDTO[]
+}
+
+/**
+ * Respuesta del enlace fijo de encuestas: que hay abierto ahora mismo.
+ *
+ * Se devuelve una lista porque nada impide tener dos encuestas abiertas a la
+ * vez; lo normal es que haya una sola o ninguna.
+ */
+export interface ActiveSurveysDTO {
+  surveys: Array<{
+    id: string
+    slug: string
+    title: string
+    anonymous: boolean
+    questionCount: number
+    endsAt: string | null
+    hasAnswered: boolean
+  }>
+  /** Si esta persona tiene el permiso de participar. */
+  canAnswer: boolean
+  serverTime: string
 }

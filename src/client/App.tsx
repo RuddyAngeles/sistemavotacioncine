@@ -16,6 +16,9 @@ import { LoginPage } from '@/client/pages/login-page'
 import { NotFoundPage } from '@/client/pages/not-found-page'
 import { ProfilePage } from '@/client/pages/profile-page'
 import { VotePage } from '@/client/pages/vote-page'
+import { ActiveSurveyPage } from '@/client/pages/active-survey-page'
+import { SurveyPage } from '@/client/pages/survey-page'
+import { SurveysHomePage } from '@/client/pages/surveys-home-page'
 import { VoterHomePage } from '@/client/pages/voter-home-page'
 
 /**
@@ -42,6 +45,15 @@ const PollNewPage = lazy(() =>
 )
 const PollEditorPage = lazy(() =>
   import('@/client/pages/admin/poll-editor-page').then((m) => ({ default: m.PollEditorPage })),
+)
+const SurveysPage = lazy(() =>
+  import('@/client/pages/admin/surveys-page').then((m) => ({ default: m.SurveysPage })),
+)
+const SurveyNewPage = lazy(() =>
+  import('@/client/pages/admin/survey-new-page').then((m) => ({ default: m.SurveyNewPage })),
+)
+const SurveyEditorPage = lazy(() =>
+  import('@/client/pages/admin/survey-editor-page').then((m) => ({ default: m.SurveyEditorPage })),
 )
 const UsersPage = lazy(() =>
   import('@/client/pages/admin/users-page').then((m) => ({ default: m.UsersPage })),
@@ -102,9 +114,12 @@ export function App() {
                 votacion abierta en ese momento.
               */}
               <Route path="/votar" element={<ActivePollPage />} />
+              <Route path="/responder" element={<ActiveSurveyPage />} />
               <Route path="/perfil" element={<ProfilePage />} />
               <Route path="/app" element={<VoterHomePage />} />
               <Route path="/app/votacion/:slug" element={<VotePage />} />
+              <Route path="/app/encuestas" element={<SurveysHomePage />} />
+              <Route path="/app/encuesta/:slug" element={<SurveyPage />} />
             </Route>
 
             {/* Area de administracion */}
@@ -114,6 +129,9 @@ export function App() {
                 <Route path="/admin/votaciones" element={<PollsPage />} />
                 <Route path="/admin/votaciones/nueva" element={<PollNewPage />} />
                 <Route path="/admin/votaciones/:id" element={<PollEditorPage />} />
+                <Route path="/admin/encuestas" element={<SurveysPage />} />
+                <Route path="/admin/encuestas/nueva" element={<SurveyNewPage />} />
+                <Route path="/admin/encuestas/:id" element={<SurveyEditorPage />} />
                 <Route path="/admin/usuarios" element={<UsersPage />} />
                 <Route path="/admin/historial" element={<HistoryPage />} />
                 <Route path="/admin/auditoria" element={<AuditPage />} />

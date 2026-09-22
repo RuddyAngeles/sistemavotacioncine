@@ -1,3 +1,4 @@
+import type { SurveyAnswerInput } from '@/shared/schemas'
 import type {
   ActivePollsDTO,
   AuditLogDTO,
@@ -12,6 +13,12 @@ import type {
   UserDTO,
   VoterPollSummaryDTO,
   VoterPollViewDTO,
+  SurveyDTO,
+  SurveyDetailDTO,
+  SurveyResultsDTO,
+  SurveyParticipationDTO,
+  SurveyViewDTO,
+  ActiveSurveysDTO,
 } from '@/shared/types'
 import { api } from './api'
 
@@ -165,4 +172,81 @@ export interface AuditFilters {
 export const auditApi = {
   list: (filters: AuditFilters = {}) =>
     api.get<PaginatedDTO<AuditLogDTO>>('/audit-logs' + toQueryString(filters)),
+}
+
+// ---------------------------------------------------------------------------
+// Encuestas
+// ---------------------------------------------------------------------------
+
+export interface SurveyFilters {
+  status?: string
+  search?: string
+  page?: number
+  pageSize?: number
+}
+
+export const surveysApi = {
+  list: (filters: SurveyFilters = {}) =>
+    api.get<PaginatedDTO<SurveyDTO>>('/surveys' + toQueryString(filters)),
+  get: (id: string) => api.get<SurveyDetailDTO>('/surveys/' + id),
+  create: (payload: unknown) => api.post<SurveyDetailDTO>('/surveys', payload),
+  update: (id: string, payload: unknown) => api.patch<SurveyDetailDTO>('/surveys/' + id, payload),
+  remove: (id: string, descartar = false) =>
+    api.delete<void>('/surveys/' + id + (descartar ? '?descartarRespuestas=true' : '')),
+
+  transition: (id: string, accion: 'publish' | 'open' | 'close' | 'archive' | 'reopen') =>
+    api.post<SurveyDetailDTO>('/surveys/' + id + '/' + accion, {}),
+
+  addQuestion: (id: string, payload: unknown) =>
+    api.post<SurveyDetailDTO>('/surveys/' + id + '/questions', payload),
+  /*
+   * "descartar" solo hace falta cuando el cambio borraria respuestas ya
+   * recibidas. Sin el, el servidor responde 409 diciendo cuantas se
+   * perderian, y la pantalla lo pregunta antes de insistir.
+   */
+  updateQuestion: (id: string, questionId: string, payload: unknown, descartar = false) =>
+    api.put<SurveyDetailDTO>(
+      '/surveys/' + id + '/questions/' + questionId + (descartar ? '?descartarRespuestas=true' : ''),
+      payload,
+    ),
+  removeQuestion: (id: string, questionId: string, descartar = false) =>
+    api.delete<SurveyDetailDTO>(
+      '/surveys/' + id + '/questions/' + questionId + (descartar ? '?descartarRespuestas=true' : ''),
+    ),
+
+  results: (id: string) => api.get<{ results: SurveyResultsDTO }>('/surveys/' + id + '/results'),
+  participation: (id: string) =>
+    api.get<{ participation: SurveyParticipationDTO }>('/surveys/' + id + '/participation'),
+
+  /** Activa o retira el permiso de participacion en bloque. */
+  setPermission: (canAnswerSurveys: boolean, userIds?: string[]) =>
+    api.post<{ updated: number }>('/surveys/permissions/bulk', { canAnswerSurveys, userIds }),
+}
+
+/** Encuestas desde el lado de quien responde. */
+export const mySurveysApi = {
+  list: () => api.get<{ items: VoterSurveySummary[] }>('/me/surveys'),
+  /** Enlace fijo /responder: que encuestas hay abiertas ahora mismo. */
+  abiertas: () => api.get<ActiveSurveysDTO>('/me/surveys/abiertas/ahora'),
+  get: (slug: string) => api.get<SurveyViewDTO>('/me/surveys/' + slug),
+  submit: (slug: string, answers: SurveyAnswerInput[]) =>
+    api.post<{ ok: true; changed: boolean }>('/me/surveys/' + slug + '/respuestas', { answers }),
+}
+
+export interface VoterSurveySummary {
+  survey: SurveyDTO
+  hasAnswered: boolean
+  canAnswer: boolean
+  canChangeAnswer: boolean
+  blockReason: string | null
+}
+
+export const surveyKeys = {
+  all: ['surveys'] as const,
+  detail: (id: string) => ['surveys', id] as const,
+  results: (id: string) => ['surveys', id, 'results'] as const,
+  participation: (id: string) => ['surveys', id, 'participation'] as const,
+  mine: ['my-surveys'] as const,
+  mineDetail: (slug: string) => ['my-surveys', slug] as const,
+  abiertas: ['my-surveys', 'abiertas'] as const,
 }

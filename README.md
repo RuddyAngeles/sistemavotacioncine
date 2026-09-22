@@ -1,12 +1,24 @@
-# Movie Night — Sistema privado de votaciones
+# Quorum — Votaciones y encuestas internas
 
-Aplicación web **privada** para votaciones internas de empresa. Nace para las
-*Movie Nights* (elegir película entre varias opciones), pero el modelo de datos
-es genérico: una votación tiene opciones, y cada opción puede o no traer
-metadatos de película.
+Aplicación web **privada** para la participación interna de una empresa. Hace
+dos cosas:
 
-No es una plataforma pública de encuestas. **No hay registro, ni login social,
-ni acceso anónimo**: solo entran las cuentas que crea un administrador.
+- **Votaciones.** Elegir entre varias opciones, con carteleras y control de
+  asistencia. Nació para las *Movie Nights* (qué película se ve), y ese sigue
+  siendo el nombre del evento, pero el modelo es genérico.
+- **Encuestas.** Varias preguntas de cuatro tipos distintos, con la opción de
+  que sean **anónimas de verdad**: sin ningún vínculo guardado entre la
+  persona y su respuesta.
+
+El nombre viene de lo que mide: qué parte del censo ha respondido.
+
+No es una plataforma pública. **No hay registro, ni login social, ni acceso
+anónimo**: solo entran las cuentas que crea un administrador.
+
+> El Worker sigue desplegado en `movie-night-votes.atubehip.workers.dev` a
+> propósito. El enlace fijo `/votar` está repartido entre la plantilla y
+> renombrar el Worker lo rompería para todo el mundo. El nombre visible y la
+> dirección son cosas distintas.
 
 ---
 
@@ -23,13 +35,14 @@ ni acceso anónimo**: solo entran las cuentas que crea un administrador.
 9. [Crear el primer administrador](#crear-el-primer-administrador)
 10. [Alta masiva de trabajadores](#alta-masiva-de-trabajadores)
 11. [Uso del sistema](#uso-del-sistema)
-12. [API](#api)
-13. [Seguridad](#seguridad)
-14. [Coste y límites del plan gratuito](#coste-y-límites-del-plan-gratuito)
-15. [Pruebas](#pruebas)
-16. [Estructura del proyecto](#estructura-del-proyecto)
-17. [Decisiones técnicas](#decisiones-técnicas)
-18. [Resolución de problemas](#resolución-de-problemas)
+12. [Encuestas](#encuestas)
+13. [API](#api)
+14. [Seguridad](#seguridad)
+15. [Coste y límites del plan gratuito](#coste-y-límites-del-plan-gratuito)
+16. [Pruebas](#pruebas)
+17. [Estructura del proyecto](#estructura-del-proyecto)
+18. [Decisiones técnicas](#decisiones-técnicas)
+19. [Resolución de problemas](#resolución-de-problemas)
 
 ---
 
@@ -53,6 +66,17 @@ ni acceso anónimo**: solo entran las cuentas que crea un administrador.
 
 > Los administradores **también votan**: el rol decide qué puedes administrar,
 > no si participas. Cualquier cuenta activa entra en el censo.
+
+**Encuestas** (ver la sección [Encuestas](#encuestas))
+
+- Crea encuestas con varias preguntas: opción única, opción múltiple, texto
+  libre y valoración del 1 al 10.
+- Decide si es anónima. Si lo es, el vínculo persona-respuesta **no se guarda**.
+- Corrige preguntas y opciones incluso con la encuesta abierta; solo pide
+  confirmación cuando el cambio descartaría respuestas ya recibidas.
+- Cambia la configuración en cualquier momento desde la pestaña *Configuración*.
+- Ve los resultados agrupados: las preguntas que comparten opciones salen en
+  una tabla comparativa ordenada, y el detalle sigue disponible aparte.
 
 **Trabajador**
 
@@ -393,7 +417,7 @@ Cada paso es un botón con confirmación. Nada ocurre solo salvo que indiques
 fechas de inicio y finalización, en cuyo caso el sistema abre y cierra a su
 hora (y también al primer acceso posterior, sin esperar al cron).
 
-### El enlace fijo (`/votar`)
+### Los enlaces fijos (`/votar` y `/responder`)
 
 A los trabajadores se les reparte **una sola dirección, siempre la misma**:
 
@@ -505,6 +529,156 @@ Se separan dos cosas distintas:
   queda registrada en la auditoría con su nombre y la fecha.
 
 Los trabajadores solo ven su propia elección, nunca la de otros.
+
+---
+
+## Encuestas
+
+Módulo aparte de las votaciones. Una encuesta tiene **varias preguntas**, de
+cuatro tipos, y puede ser **anónima**.
+
+| Tipo de pregunta | Cómo se responde | Cómo se cuenta |
+| ---------------- | ---------------- | -------------- |
+| Opción única     | Se elige una     | Reparto por opción |
+| Opción múltiple  | Se marcan varias (con mínimo y máximo opcionales) | Reparto por opción |
+| Texto libre      | Escribiendo      | Se listan las respuestas, sin firmar |
+| Valoración 1-10  | Un número        | Media e histograma |
+
+### El permiso de participación
+
+Participar en encuestas es un **permiso independiente del rol**
+(`users.can_answer_surveys`). No lo da ser trabajador ni lo da ser
+administrador: un admin sin el permiso puede crear y gestionar encuestas, pero
+no responderlas.
+
+**Nace desactivado en todas las cuentas.** Se concede una a una desde
+*Usuarios*, o a toda la plantilla de golpe con *Activar a todos* en la pantalla
+de Encuestas. Mientras no haya ninguna cuenta con el permiso, el editor avisa
+de que nadie podrá responder.
+
+Un administrador que se encuentre el bloqueo puede **activárselo él mismo** de
+un clic, desde la propia pantalla donde se lo topa. La regla se mantiene
+—crear encuestas y responderlas son cosas distintas—, pero desde el lado de
+quien la crea, no poder responder su propia encuesta y no tener a quién
+pedírselo parece un error. El cambio queda en la auditoría como cualquier otro.
+
+### Cómo funciona el anonimato
+
+El anonimato **no es una casilla que la interfaz respete**: es la forma en que
+se guardan los datos.
+
+```
+survey_participants   QUIÉN respondió      (siempre, también en las anónimas)
+survey_submissions    UN envío             (user_id = NULL si es anónima)
+survey_answers        las respuestas       (cuelgan del envío)
+```
+
+No existe ninguna columna, índice ni consulta que relacione una fila de
+participantes con una de envíos. Ni la aplicación ni una consulta SQL directa
+pueden deshacer el anonimato, porque **el dato no llega a escribirse**.
+
+Tres detalles que cierran los caminos indirectos:
+
+- La hora del envío se **redondea al día** en las anónimas. Con la hora exacta,
+  quien mirase la base podría emparejar el envío con la persona que participó
+  en ese mismo segundo.
+- `survey_submissions` es `WITHOUT ROWID`. Con rowid, las filas quedarían en
+  orden de inserción y se podría emparejar el envío n-ésimo con el participante
+  n-ésimo; al ordenarse por un id aleatorio, ese rastro desaparece.
+- Con menos de 5 respuestas, los resultados muestran un **aviso de anonimato
+  débil**: con tan pocas, quien conozca al equipo puede deducir quién dijo qué.
+
+### Consecuencias de ser anónima
+
+- **No se puede cambiar la respuesta**, ni siquiera por quien la envió. Sin
+  vínculo persona-envío no hay nada que localizar para modificarlo. Lo impide
+  también un `CHECK` en la base: `anonymous = 0 OR allow_response_change = 0`.
+- **Quien respondió no puede releer lo que puso.** Sabe que ya participó, nada
+  más.
+- **El anonimato solo se puede cambiar mientras la encuesta sea un borrador.**
+  Activarlo después no anonimizaría lo ya guardado, y desactivarlo prometería
+  una identificación que no existe.
+
+### Qué ve el administrador según el anonimato
+
+| Dato | Encuesta identificada | Encuesta anónima |
+| ---- | --------------------- | ---------------- |
+| Totales por pregunta | Sí | Sí |
+| Quién ha participado y quién falta | Sí | Sí |
+| Qué respondió cada persona | Sí | **No, y no existe** |
+| Censo y participación | Sí | Sí |
+
+Saber quién participó es lo que permite recordárselo a quien falte, y no revela
+ninguna respuesta.
+
+### Editar una encuesta ya abierta
+
+Las preguntas **no se bloquean al abrir la encuesta**. Lo que decide es si ya
+hay respuestas, no el estado:
+
+| Cambio | Con 0 respuestas | Con respuestas |
+| ------ | ---------------- | -------------- |
+| Corregir el enunciado | Libre | Libre, no se pierde nada |
+| Corregir el texto de una opción | Libre | Libre, las respuestas se conservan |
+| Quitar una opción contestada | Libre | Pide confirmación: descarta esas respuestas |
+| Eliminar una pregunta contestada | Libre | Pide confirmación |
+| Cambiar el tipo de pregunta | Libre | Pide confirmación: invalida lo respondido |
+| Eliminar la encuesta | Libre | Pide confirmación, y sugiere archivar |
+
+Lo único cerrado del todo es una encuesta **CLOSED o ARCHIVED**: sus resultados
+ya se dieron por buenos.
+
+> Al guardar una pregunta, las opciones se cruzan **por identificador**: las
+> que siguen se actualizan en su sitio y solo se borran las que de verdad se
+> han quitado. Borrarlas y reinsertarlas sería más corto de escribir, pero
+> `ON DELETE CASCADE` se llevaría por delante las respuestas que apuntan a
+> ellas, y corregir una errata destruiría datos sin avisar.
+
+La configuración (anonimato, cambio de respuesta, visibilidad de resultados)
+se edita desde la pestaña **Configuración**, también con la encuesta abierta.
+El anonimato es la excepción: solo se toca en borrador.
+
+### Qué ve el participante frente al administrador
+
+| Dato | Participante | Administrador |
+| ---- | ------------ | ------------- |
+| Recuento por opción y media de las escalas | Solo si se activa | Siempre |
+| **Respuestas escritas** | **Nunca** | Siempre |
+| Quién ha respondido y quién falta | Nunca | Siempre |
+| Censo y participación | Nunca | Siempre |
+
+La distinción es deliberada: **un recuento es una estadística; un comentario
+escrito es la respuesta individual de alguien reproducida tal cual**. Aunque no
+lleve firma, enseñárselo a la plantilla es enseñar lo que respondió otro. Si
+quien pregunta no es administrador, el servidor **ni siquiera consulta los
+textos**; al participante le llega cuántos hay, no cuáles.
+
+### Cómo se organizan los resultados
+
+Con 26 preguntas, una lista de 26 gráficos no se lee. Hay dos vistas:
+
+- **Resumen.** Las preguntas que comparten exactamente las mismas opciones se
+  agrupan en una tabla comparativa, ordenada por el peso de la primera opción.
+  Es donde se ve de un vistazo qué está mejor y qué peor. Debajo, las
+  valoraciones con su media y las respuestas escritas plegadas.
+- **Detalle.** Cada pregunta por separado, en el orden del cuestionario.
+
+El sistema **no interpreta si una opción es buena o mala**: no puede saberlo, y
+fingir que sí llevaría a pintar de verde lo que no toca. Ordena por la primera
+opción y lo dice en la cabecera. Los colores son una gradación en el orden de
+las opciones, no un semáforo.
+
+Las respuestas escritas empiezan **plegadas**, con un contador y un buscador
+dentro. Con 82 personas y cuatro preguntas de texto salen cientos de
+comentarios, y desplegados de golpe entierran todo lo demás.
+
+### Ciclo de vida
+
+El mismo que las votaciones: borrador → publicada → abierta → cerrada →
+archivada, con programación horaria opcional que el cron aplica cada 5 minutos.
+Las preguntas se bloquean al abrir la encuesta: cambiarlas con respuestas ya
+recibidas dejaría gente contestando a una pregunta distinta de la que se cuenta.
+
 
 ---
 

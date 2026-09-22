@@ -16,4 +16,8 @@ worker-configuration.d.ts
 *.log
 
 # Credenciales repartibles (contrasenas en claro). Nunca al repositorio.
+#
+# Cubre tambien los .xlsx: se generan a partir de los csv y llevan las
+# mismas contrasenas dentro. Excluir solo el csv dejaria la puerta abierta.
 credenciales*.csv
+credenciales*.xlsx

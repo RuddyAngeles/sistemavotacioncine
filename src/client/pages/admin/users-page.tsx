@@ -29,7 +29,7 @@ import type {
   EditUserFormValues,
   ResetPasswordFormValues,
 } from '@/client/lib/form-schemas'
-import { queryKeys, usersApi, type UserFilters } from '@/client/lib/queries'
+import { queryKeys, surveysApi, usersApi, type UserFilters } from '@/client/lib/queries'
 import type { UserDTO } from '@/shared/types'
 
 /**
@@ -81,6 +81,27 @@ export function UsersPage() {
       await invalidate()
     },
     onError: (mutationError) => toast.error(errorMessage(mutationError)),
+  })
+
+
+  /**
+   * Permiso de encuestas de una cuenta concreta.
+   *
+   * Usa la ruta en bloque con un solo id: es la misma operacion y asi la
+   * comprobacion de permisos y la auditoria viven en un unico sitio.
+   */
+  const permisoEncuestas = useMutation({
+    mutationFn: ({ user, permitido }: { user: UserDTO; permitido: boolean }) =>
+      surveysApi.setPermission(permitido, [user.id]),
+    onSuccess: async (_resultado, variables) => {
+      toast.success(
+        variables.permitido
+          ? variables.user.name + ' ya puede participar en encuestas'
+          : 'Permiso de encuestas retirado a ' + variables.user.name,
+      )
+      await queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+    onError: (error) => toast.error(errorMessage(error, 'No se ha podido cambiar el permiso')),
   })
 
   const updateMutation = useMutation({
@@ -206,6 +227,9 @@ export function UsersPage() {
                 id: user.id,
                 values: { status: user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' },
               })
+            }
+            onToggleSurveys={(user) =>
+              permisoEncuestas.mutate({ user, permitido: !user.canAnswerSurveys })
             }
           />
 

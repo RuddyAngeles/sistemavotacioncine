@@ -131,6 +131,7 @@ async function createSession(c: Context<AppEnv>, userId: string): Promise<Sessio
     username: user?.username ?? '',
     role: user?.role ?? 'VOTER',
     mustChangePassword: fromBool(user?.must_change_password),
+    canAnswerSurveys: fromBool(user?.can_answer_surveys),
   }
 }
 
@@ -187,6 +188,7 @@ export async function resolveSession(c: Context<AppEnv>): Promise<ResolvedSessio
       role: row.role,
       status: row.status,
       mustChangePassword: fromBool(row.must_change_password),
+      canAnswerSurveys: fromBool(row.can_answer_surveys),
     },
     sessionId,
   }

@@ -5,6 +5,7 @@ import type { Bindings } from './env'
 import { applySecurityHeaders } from './lib/http'
 import { cleanupLoginAttempts } from './lib/rate-limit'
 import { syncScheduledPolls } from './services/polls'
+import { syncScheduledSurveys } from './services/surveys'
 
 /** Retencion de la auditoria, en dias. */
 const AUDIT_RETENTION_DAYS = 365
@@ -62,6 +63,13 @@ export default {
           const { opened, closed } = await syncScheduledPolls(env.DB, now)
           if (opened > 0 || closed > 0) {
             console.warn('[cron] votaciones abiertas: ' + opened + ', cerradas: ' + closed)
+          }
+
+          const encuestas = await syncScheduledSurveys(env.DB, now)
+          if (encuestas.opened > 0 || encuestas.closed > 0) {
+            console.warn(
+              '[cron] encuestas abiertas: ' + encuestas.opened + ', cerradas: ' + encuestas.closed,
+            )
           }
 
           await deleteExpiredSessions(env.DB, iso)

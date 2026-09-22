@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { motion } from 'framer-motion'
-import { Clapperboard, Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Field, fieldAria } from '@/client/components/common/field'
 import { ThemeToggle } from '@/client/components/common/theme-toggle'
+import { BrandMark } from '@/client/components/layout/brand-mark'
 import { Button } from '@/client/components/ui/button'
 import { Card, CardContent } from '@/client/components/ui/card'
 import { Input } from '@/client/components/ui/input'
@@ -69,11 +70,9 @@ export function LoginPage() {
           className="w-full max-w-sm"
         >
           <div className="mb-8 flex flex-col items-center gap-3 text-center">
-            <span className="flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-raised">
-              <Clapperboard className="size-6" />
-            </span>
+            <BrandMark className="size-14 text-brand" />
             <div className="space-y-1">
-              <h1 className="text-2xl font-semibold tracking-tight">Movie Night</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Quorum</h1>
               <p className="text-sm text-muted-foreground">Inicia sesion para continuar</p>
             </div>
           </div>
@@ -114,7 +113,8 @@ export function LoginPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((current) => !current)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      /* size-10: con p-1.5 el area tactil era de 28px y se falla con el dedo. */
+                      className="absolute right-1 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
                     >
                       {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
