@@ -79,6 +79,7 @@ async function abrirVotacionDePrueba(
   page: Page,
   titulo: string,
   settings: Record<string, unknown> = {},
+  peliculas: string[] = ['Interstellar'],
 ): Promise<string> {
   const base = 'http://localhost:5173'
   const headers = { Origin: base }
@@ -94,10 +95,12 @@ async function abrirVotacionDePrueba(
   })
   const poll = (await created.json()) as { id: string; slug: string }
 
-  await page.request.post(base + '/api/polls/' + poll.id + '/options', {
-    headers,
-    data: { title: 'Interstellar' },
-  })
+  for (const pelicula of peliculas) {
+    await page.request.post(base + '/api/polls/' + poll.id + '/options', {
+      headers,
+      data: { title: pelicula },
+    })
+  }
   await page.request.post(base + '/api/polls/' + poll.id + '/publish', { headers })
   await page.request.post(base + '/api/polls/' + poll.id + '/open', { headers })
   await page.request.post(base + '/api/auth/logout', { headers })
@@ -526,5 +529,110 @@ test.describe('asistencia', () => {
     expect(cuerpo).not.toContain('notAttending')
     expect(cuerpo).not.toContain('eligibleVoters')
     expect((JSON.parse(cuerpo) as { results: { overview: unknown } }).results.overview).toBeNull()
+  })
+})
+
+test.describe('integridad del voto', () => {
+  /**
+   * El intento de trampa mas obvio: abrir la sesion en dos navegadores.
+   *
+   * Son dos contextos de Playwright independientes, con su propio almacen
+   * de cookies, igual que Chrome y Firefox abiertos a la vez. La misma
+   * persona entra en los dos y trata de votar en cada uno.
+   */
+  test('la misma cuenta en dos navegadores no consigue votar dos veces', async ({ browser }) => {
+    const base = 'http://localhost:5173'
+
+    const preparacion = await browser.newContext()
+    const paginaPreparacion = await preparacion.newPage()
+    await cerrarVotacionesAbiertas(paginaPreparacion)
+    const slug = await abrirVotacionDePrueba(
+      paginaPreparacion,
+      'Trampa E2E ' + Date.now(),
+      { allowVoteChange: false, showLiveResults: true },
+      ['Interstellar', 'Origen'],
+    )
+    await preparacion.close()
+
+    // --- Navegador 1: vota ---
+    const navegador1 = await browser.newContext()
+    const pagina1 = await navegador1.newPage()
+    await login(pagina1, CARLOS)
+    await pagina1.goto('/app/votacion/' + slug)
+    await pagina1.getByRole('button', { name: 'Elegir pelicula' }).first().click()
+    await pagina1.getByRole('dialog').getByRole('button', { name: 'Confirmar voto' }).click()
+    await expect(pagina1.locator('#contenido').getByText('Respuesta registrada')).toBeVisible()
+
+    // --- Navegador 2: misma cuenta, sesion nueva ---
+    const navegador2 = await browser.newContext()
+    const pagina2 = await navegador2.newPage()
+    await login(pagina2, CARLOS)
+
+    // Las cookies son distintas: son dos sesiones de verdad.
+    const galleta = async (contexto: typeof navegador1) =>
+      (await contexto.cookies()).find((c) => c.name.includes('session'))?.value
+    expect(await galleta(navegador1)).not.toBe(await galleta(navegador2))
+    expect(await galleta(navegador2)).toBeTruthy()
+
+    await pagina2.goto('/app/votacion/' + slug)
+
+    // La pantalla ya no ofrece votar: reconoce a la persona, no al navegador.
+    await expect(pagina2.locator('#contenido').getByText('Respuesta registrada')).toBeVisible()
+    await expect(pagina2.getByRole('button', { name: 'Elegir pelicula' })).toHaveCount(0)
+
+    /*
+     * Y saltandose la interfaz tampoco.
+     *
+     * El voto forzado usa el id real de la OTRA pelicula, no uno inventado:
+     * con un id falso la peticion se rechazaria por no existir la opcion y
+     * no llegariamos a probar lo que interesa, que es el segundo voto.
+     */
+    const vista = await pagina2.evaluate(async () => {
+      const r = await fetch('/api/me/polls/' + location.pathname.split('/').pop())
+      return (await r.json()) as {
+        poll: { id: string }
+        options: Array<{ id: string; title: string }>
+        myVote: { optionId: string } | null
+      }
+    })
+    const idVotacion = vista.poll.id
+    const otraPelicula = vista.options.find((o) => o.id !== vista.myVote?.optionId)
+    expect(otraPelicula).toBeTruthy()
+
+    const forzado = await pagina2.request.post(base + '/api/polls/' + idVotacion + '/vote', {
+      headers: { Origin: base },
+      data: { optionId: otraPelicula!.id },
+    })
+    expect(forzado.status()).toBe(409)
+
+    const cambio = await pagina2.request.patch(base + '/api/polls/' + idVotacion + '/vote', {
+      headers: { Origin: base },
+      data: { notAttending: true },
+    })
+    expect(cambio.status()).toBe(409)
+
+    // --- El recuento del administrador: un solo voto ---
+    const revision = await browser.newContext()
+    const paginaRevision = await revision.newPage()
+    await paginaRevision.request.post(base + '/api/auth/login', {
+      headers: { Origin: base },
+      data: { username: ADMIN.username, password: ADMIN.password },
+    })
+    const res = await paginaRevision.request.get(base + '/api/polls/' + idVotacion + '/results')
+    const { results } = (await res.json()) as {
+      results: { overview: { totalVotes: number; attendance: { attending: number } } }
+    }
+    expect(results.overview.totalVotes).toBe(1)
+    expect(results.overview.attendance.attending).toBe(1)
+
+    const detalle = await paginaRevision.request.get(
+      base + '/api/polls/' + idVotacion + '/participation',
+    )
+    const { participation } = (await detalle.json()) as { participation: { voted: number } }
+    expect(participation.voted).toBe(1)
+
+    await navegador1.close()
+    await navegador2.close()
+    await revision.close()
   })
 })

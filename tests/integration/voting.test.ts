@@ -6,7 +6,7 @@ import type {
   ResultsDTO,
   VoterPollViewDTO,
 } from '../../src/shared/types'
-import { call, createUserAndLogin, json, resetDatabase } from '../helpers'
+import { call, createUserAndLogin, json, loginOtraVez, resetDatabase } from '../helpers'
 
 interface PollSetup {
   poll: PollDetailDTO
@@ -406,5 +406,203 @@ describe('flujo completo de votacion', () => {
       body: { title: 'Pelicula tardia' },
     })
     expect(response.status).toBe(409)
+  })
+})
+
+/**
+ * Intentos de votar dos veces con la misma cuenta.
+ *
+ * El caso real es abrir la sesion en dos navegadores (o en el movil y el
+ * ordenador) y enviar un voto desde cada uno. Son dos sesiones distintas,
+ * asi que ninguna comprobacion basada en la cookie serviria: lo que impide
+ * el doble voto es la restriccion UNIQUE (poll_id, user_id) de la base.
+ */
+describe('un voto por persona, aunque haya varias sesiones', () => {
+  let admin: { cookie: string }
+  let poll: PollDetailDTO
+  let opciones: PollOptionDTO[]
+
+  async function filasDeVoto(): Promise<Array<{ option_id: string | null; change_count: number }>> {
+    const { results } = await env.DB.prepare(
+      'SELECT option_id, change_count FROM votes WHERE poll_id = ?',
+    )
+      .bind(poll.id)
+      .all<{ option_id: string | null; change_count: number }>()
+    return results ?? []
+  }
+
+  beforeEach(async () => {
+    await resetDatabase()
+    admin = await createUserAndLogin({ username: 'admin', role: 'ADMIN' })
+    const creada = await createPoll(admin.cookie, {
+      allowVoteChange: false,
+      showLiveResults: true,
+      showResultsAfterClose: true,
+    })
+    poll = creada.poll
+    opciones = creada.options
+    await publishAndOpen(admin.cookie, poll.id)
+  })
+
+  it('el segundo navegador no puede emitir otro voto', async () => {
+    const carlos = await createUserAndLogin({ username: 'carlos01' })
+    const segundoNavegador = await loginOtraVez('carlos01')
+
+    // Dos sesiones de verdad: cookies distintas y las dos validas.
+    expect(segundoNavegador).not.toBe(carlos.cookie)
+    expect((await call('/api/auth/me', { cookie: segundoNavegador })).status).toBe(200)
+
+    const primero = await call('/api/polls/' + poll.id + '/vote', {
+      method: 'POST',
+      cookie: carlos.cookie,
+      body: { optionId: opciones[0]!.id },
+    })
+    expect(primero.status).toBe(200)
+
+    // Mismo usuario, otra sesion, otra pelicula: rechazado.
+    const segundo = await call('/api/polls/' + poll.id + '/vote', {
+      method: 'POST',
+      cookie: segundoNavegador,
+      body: { optionId: opciones[1]!.id },
+    })
+    expect(segundo.status).toBe(409)
+
+    const filas = await filasDeVoto()
+    expect(filas).toHaveLength(1)
+    expect(filas[0]!.option_id).toBe(opciones[0]!.id)
+  })
+
+  it('tampoco cuela enviando los dos votos a la vez', async () => {
+    const carlos = await createUserAndLogin({ username: 'carlos01' })
+    const segundoNavegador = await loginOtraVez('carlos01')
+
+    /*
+     * Las dos peticiones salen sin esperar a la otra. Si la unica defensa
+     * fuese el "ya has votado" que se consulta antes de insertar, las dos
+     * lo leerian vacio y las dos insertarian. Quien lo impide es la base.
+     */
+    const [a, b] = await Promise.all([
+      call('/api/polls/' + poll.id + '/vote', {
+        method: 'POST',
+        cookie: carlos.cookie,
+        body: { optionId: opciones[0]!.id },
+      }),
+      call('/api/polls/' + poll.id + '/vote', {
+        method: 'POST',
+        cookie: segundoNavegador,
+        body: { optionId: opciones[1]!.id },
+      }),
+    ])
+
+    const estados = [a.status, b.status].sort()
+    expect(estados).toEqual([200, 409])
+    expect(await filasDeVoto()).toHaveLength(1)
+  })
+
+  it('con el cambio de voto desactivado, el segundo navegador tampoco lo cambia', async () => {
+    const carlos = await createUserAndLogin({ username: 'carlos01' })
+    const segundoNavegador = await loginOtraVez('carlos01')
+
+    await call('/api/polls/' + poll.id + '/vote', {
+      method: 'POST',
+      cookie: carlos.cookie,
+      body: { optionId: opciones[0]!.id },
+    })
+
+    const intento = await call('/api/polls/' + poll.id + '/vote', {
+      method: 'PATCH',
+      cookie: segundoNavegador,
+      body: { optionId: opciones[1]!.id },
+    })
+    expect(intento.status).toBe(409)
+
+    const filas = await filasDeVoto()
+    expect(filas).toHaveLength(1)
+    expect(filas[0]!.option_id).toBe(opciones[0]!.id)
+  })
+
+  it('si la votacion permite cambiar el voto, el segundo navegador cambia el suyo, no anade otro', async () => {
+    const otra = await createPoll(admin.cookie, {
+      allowVoteChange: true,
+      showLiveResults: true,
+      showResultsAfterClose: true,
+    })
+    await publishAndOpen(admin.cookie, otra.poll.id)
+
+    const carlos = await createUserAndLogin({ username: 'carlos01' })
+    const segundoNavegador = await loginOtraVez('carlos01')
+
+    await call('/api/polls/' + otra.poll.id + '/vote', {
+      method: 'POST',
+      cookie: carlos.cookie,
+      body: { optionId: otra.options[0]!.id },
+    })
+
+    const cambio = await call('/api/polls/' + otra.poll.id + '/vote', {
+      method: 'PATCH',
+      cookie: segundoNavegador,
+      body: { optionId: otra.options[1]!.id },
+    })
+    expect(cambio.status).toBe(200)
+
+    // Sigue siendo una sola fila: es la misma persona cambiando de idea.
+    const { results } = await env.DB.prepare(
+      'SELECT option_id, change_count FROM votes WHERE poll_id = ?',
+    )
+      .bind(otra.poll.id)
+      .all<{ option_id: string | null; change_count: number }>()
+
+    expect(results).toHaveLength(1)
+    expect(results?.[0]?.option_id).toBe(otra.options[1]!.id)
+    expect(results?.[0]?.change_count).toBe(1)
+  })
+
+  /**
+   * La ultima linea de defensa, sin pasar por la API.
+   *
+   * Las pruebas de arriba dependen de como se intercalen las peticiones.
+   * Esta no: inserta dos filas a mano para el mismo par votacion/usuario y
+   * comprueba que es la propia base la que lo rechaza. Si alguien quitara
+   * la restriccion en una migracion futura, este test se entera.
+   */
+  it('la base rechaza dos votos del mismo usuario en la misma votacion', async () => {
+    const carlos = await createUserAndLogin({ username: 'carlos01' })
+    const ahora = new Date().toISOString()
+
+    const insertar = (id: string, optionId: string) =>
+      env.DB.prepare(
+        'INSERT INTO votes (id, poll_id, user_id, option_id, attending, change_count, created_at, updated_at)' +
+          ' VALUES (?, ?, ?, ?, 1, 0, ?, ?)',
+      )
+        .bind(id, poll.id, carlos.id, optionId, ahora, ahora)
+        .run()
+
+    await insertar('voto-1', opciones[0]!.id)
+    await expect(insertar('voto-2', opciones[1]!.id)).rejects.toThrow(/UNIQUE|constraint/i)
+
+    expect(await filasDeVoto()).toHaveLength(1)
+  })
+  it('el recuento no se mueve por mucho que se insista desde varias sesiones', async () => {
+    const carlos = await createUserAndLogin({ username: 'carlos01' })
+    const sesiones = [carlos.cookie, await loginOtraVez('carlos01'), await loginOtraVez('carlos01')]
+
+    for (const cookie of sesiones) {
+      for (const opcion of opciones) {
+        await call('/api/polls/' + poll.id + '/vote', {
+          method: 'POST',
+          cookie,
+          body: { optionId: opcion.id },
+        })
+      }
+    }
+
+    const results = (
+      await json<{ results: ResultsDTO }>(
+        await call('/api/polls/' + poll.id + '/results', { cookie: admin.cookie }),
+      )
+    ).results
+
+    expect(results.overview?.attendance.attending).toBe(1)
+    expect(results.options.reduce((total, o) => total + o.votes, 0)).toBe(1)
   })
 })

@@ -105,6 +105,26 @@ export async function createUserAndLogin(
   return { id: user.id, username: user.username, cookie: sessionCookie(response) }
 }
 
+/**
+ * Abre otra sesion para un usuario que ya existe.
+ *
+ * Es lo que pasa cuando alguien entra desde un segundo navegador: misma
+ * cuenta, cookie distinta. Sirve para comprobar que la identidad que cuenta
+ * es el usuario y no la sesion.
+ */
+export async function loginOtraVez(username: string, password = 'Secreta123'): Promise<string> {
+  const response = await call('/api/auth/login', {
+    method: 'POST',
+    body: { username, password },
+  })
+
+  if (response.status !== 200) {
+    throw new Error('El segundo login ha fallado con estado ' + response.status)
+  }
+
+  return sessionCookie(response)
+}
+
 /** Limpia todas las tablas entre tests que lo necesiten. */
 export async function resetDatabase(): Promise<void> {
   await env.DB.batch([
